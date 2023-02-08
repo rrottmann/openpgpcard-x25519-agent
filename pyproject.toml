@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=46.1.0", "setuptools_scm[toml]>=5"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.isort]
+profile = "black"
+known_first_party = "openpgpcard_x25519_agent"
+
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"

@@ -1,0 +1,7 @@
+# words not already in flake8-spellcheck's en_US, python, or technical dictionaries
+cnf
+docopt
+openpgpcard
+scm
+setenv
+x25519
