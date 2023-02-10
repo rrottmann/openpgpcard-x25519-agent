@@ -23,6 +23,12 @@ from sys import exit
 from docopt import docopt
 
 from openpgpcard_x25519_agent import __version__
+from openpgpcard_x25519_agent.card import (
+    format_card_info,
+    format_cards_info,
+    get_card_by_id,
+    list_all_cards,
+)
 from openpgpcard_x25519_agent.cnf import init_log
 
 
@@ -43,8 +49,8 @@ def main():
 
 def show_all():
     """List all cards."""
-    # to implement
-    print("show all")  # noqa: T201
+    # print list to stdout
+    print(format_cards_info(list_all_cards()))  # noqa: T201
 
 
 def show(card):
@@ -53,9 +59,8 @@ def show(card):
     Arguments:
         card: Card ID.
     """
-    # to implement
-    print("show")  # noqa: T201
-    exit(1)
+    # print info to stdout
+    print(format_card_info(get_card_by_id(card)))  # noqa: T201
 
 
 def listen(socket, card):
