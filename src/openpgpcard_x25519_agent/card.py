@@ -1,14 +1,25 @@
 """Card utilities."""
 
 from base64 import b64encode
+from getpass import getpass
 from logging import getLogger
 
-from OpenPGPpy import ConnectionException, DataException, OpenPGPcard, PGPCardException
+from OpenPGPpy import (
+    ConnectionException,
+    DataException,
+    OpenPGPcard,
+    PGPCardException,
+    PinException,
+)
 from smartcard.System import readers
 
 SIGNATURE_SLOT = 1
 ENCRYPTION_SLOT = 2
 AUTHENTICATION_SLOT = 3
+
+SIGNATURE_PIN = 1
+ENCRYPTION_PIN = 2
+ADMIN_PIN = 3
 
 KEY_CRTS = {
     (SIGNATURE_SLOT): "B600",
@@ -17,6 +28,7 @@ KEY_CRTS = {
 }
 
 CURVE_25519_DO_PREFIX = bytes.fromhex("7F49 22 86 20")
+CURVE_25519_CIPHER_DO_PREFIX = bytes.fromhex("A6 25") + CURVE_25519_DO_PREFIX
 
 ECC_KEY_TYPES = {
     "2A8648CE3D030107": "nistp256",
@@ -139,6 +151,180 @@ def get_card_by_id(card_id):
             return card
 
     raise ConnectionException(f"no card with id {serial:#x}")
+
+
+def get_default_card():
+    """First available card, or raises.
+
+    Returns:
+        OpenPGPcard: First available card.
+
+    Raises:
+        ConnectionException: If no available cards.
+    """
+    for i in range(0, count_all_cards()):
+        card = get_card_by_index_or_none(i)
+        if card:
+            return card
+
+    raise ConnectionException("no available cards")
+
+
+def send_simple_command(
+    card, class_byte, instruction, parameter_1=0, parameter_2=0, data=None
+):
+    """Submits the specified command to the specified card.
+
+    If the command succeeds, returns the command's output data.
+    If the command fails, will raise a `PGPCardException` with the status bytes.
+
+    Note this only works for certain commands with short input and output data.
+
+    Arguments:
+        card (OpenPGPcard): Card.
+        class_byte (int): Command class byte.
+        instruction (int): Instruction byte.
+        parameter_1 (int): Parameter 1 byte.
+        parameter_2 (int): Parameter 2 byte.
+        data (bytearray): Command input data.
+
+    Returns:
+        bytearray: Command output data.
+
+    Raises:
+        PGPCardException: If the command fails.
+    """
+    length = len(data) if data else 0
+    command = [class_byte, instruction, parameter_1, parameter_2, length]
+    if data:
+        command[6:] = data
+
+    _log_command(class_byte, instruction, parameter_1, parameter_2, length)
+    result, status_1, status_2 = _send_command_and_zero(card, command)
+    _log_response(status_1, status_2, len(result))
+
+    if status_1 != 0x90 or status_2 != 0x00:
+        raise PGPCardException(status_1, status_2)
+    return result
+
+
+def _log_command(cla, ins, p1, p2, lc):  # noqa: SC200
+    s = "sending command to card: %x %x %x %x + %x bytes"
+    getLogger(__name__).debug(s, cla, ins, p1, p2, lc)  # noqa: SC200
+
+
+def _log_response(sw1, sw2, length):  # noqa: SC200
+    s = "received response from card: %x %x + %x bytes"
+    getLogger(__name__).debug(s, sw1, sw2, length)  # noqa: SC200
+
+
+def _send_command_and_zero(card, command):
+    try:
+        return card.connection.transmit(command)
+    finally:
+        command[:] = [0] * len(command)
+
+
+def verify_pin(card, pin, slot=ENCRYPTION_PIN):
+    """Submits the specified pin to the specified card for verification.
+
+    If the PIN is valid, succeeds. If the PIN is invalid (or blocked),
+    will raise a `PinException` with the number of retries left for the PIN.
+
+    Arguments:
+        card (OpenPGPcard): Card.
+        pin (bytearray): PIN to verify.
+        slot (int): PIN type (defaults to encryption PIN).
+
+    Raises:
+        PinException: If the PIN is incorrect or blocked.
+        PGPCardException: If the operation fails for some other reason.
+    """
+    try:
+        send_simple_command(card, 0, 0x20, 0, 0x80 + slot, pin)
+    except PGPCardException as e:
+        if e.sw_code & 0xFFF0 == 0x63C0:
+            raise PinException(e.sw_code - 0x63C0)
+        raise e
+
+
+def calculate_x25519_shared_secret(card, public_key):
+    """Performs ECDH with the specified card.
+
+    Assumes this operation has already been authorized by verifying the PIN
+    (or by other means). If not authorized, will raise a `PGPCardException'.
+
+    Assumes the desired key slot to use for ECDH has already been set
+    via the card's Manage Security Environment (MSE) command. If not set,
+    the card defaults to using the encryption key slot.
+
+    Arguments:
+        card (OpenPGPcard): Card.
+        public_key (bytearray): Other party's public key.
+
+    Returns:
+        bytearray: Shared secret.
+
+    Propagates:
+        PGPCardException: If the PIN needs to be verified before this operation
+            is allowed, or if the operation fails for some other reason.
+    """
+    data = CURVE_25519_CIPHER_DO_PREFIX + public_key
+    return send_simple_command(card, 0, 0x2A, 0x80, 0x86, data)
+
+
+def calculate_shared_secret(card, public_key, pin=None):
+    """Performs ECDH with the specified card.
+
+    Assumes the desired key slot to use for ECDH has already been set
+    via the card's Manage Security Environment (MSE) command. If not set,
+    the card defaults to using the encryption key slot.
+
+    Arguments:
+        card (OpenPGPcard): Card.
+        public_key (bytearray): Other party's public key.
+        pin (bytearray): PIN to verify before performing this operation.
+
+    Returns:
+        bytearray: Shared secret.
+
+    Raises:
+        PGPCardException: If this operation fails.
+
+    Propagates:
+        PinException: If the PIN is incorrect or blocked.
+    """
+    try:
+        return calculate_x25519_shared_secret(card, public_key)
+    except PGPCardException as e:
+        if e.sw_code != 0x6982 or not pin:
+            raise e
+        verify_pin(card, pin)
+        return calculate_x25519_shared_secret(card, public_key)
+
+
+def test_card(card_id=None):
+    """Attempts a test X25519 operation with the specified card.
+
+    Prints card info and prompts for PIN.
+    If successful, does nothing. If fails, raises an exception.
+
+    Arguments:
+        card_id: Card serial number or index (eg 0x3f or "3f").
+
+    Propagates:
+        PinException: If the PIN is incorrect or blocked.
+        PGPCardException: If the ECDH command fails.
+        ConnectionException: If the specified card is unavailable.
+    """
+    card = get_card_by_id(card_id) if card_id else get_default_card()
+
+    # print info to stdout
+    print(format_card_info(card))  # noqa: T201
+    print("Enter card user PIN: ")  # noqa: T201
+    pin = getpass("").encode()
+
+    calculate_shared_secret(card, bytearray(b"\xff" * 32), pin)
 
 
 def get_key_type(card, slot=ENCRYPTION_SLOT):

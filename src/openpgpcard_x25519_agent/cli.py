@@ -6,6 +6,7 @@ Usage:
   openpgpcard-x25519-agent [--card=ID] [-v | -vv | --verbosity=LEVEL]
   openpgpcard-x25519-agent --listen=SOCKET [--card=ID]
                            [-v | -vv | --verbosity=LEVEL]
+  openpgpcard-x25519-agent --test [--card=ID] [-v | -vv | --verbosity=LEVEL]
   openpgpcard-x25519-agent --help
   openpgpcard-x25519-agent --version
 
@@ -14,6 +15,7 @@ Options:
   --version             Show agent version
   -c --card=ID          Card to use (default: first found)
   -l --listen=SOCKET    Listen on socket path (default: /run/wg/agent1)
+  --test                Prompt for PIN and attempt a test X25519 operation.
   --verbosity=LEVEL     Log level (ERROR, WARNING, INFO, DEBUG)
   -v                    INFO verbosity
   -vv                   DEBUG verbosity
@@ -28,6 +30,7 @@ from openpgpcard_x25519_agent.card import (
     format_cards_info,
     get_card_by_id,
     list_all_cards,
+    test_card,
 )
 from openpgpcard_x25519_agent.cnf import init_log
 
@@ -41,6 +44,8 @@ def main():
         version()
     elif args["--listen"]:
         listen(args["--listen"], args["--card"])
+    elif args["--test"]:
+        test(args["--card"])
     elif args["--card"]:
         show(args["--card"])
     else:
@@ -73,6 +78,17 @@ def listen(socket, card):
     # to implement
     print("listen")  # noqa: T201
     exit(1)
+
+
+def test(card=None):
+    """Attempt test X25519 operation.
+
+    Arguments:
+        card: Card ID.
+    """
+    test_card(card)
+    # print result to stdout
+    print("X25519 SUCCESS")  # noqa: T201
 
 
 def version():
