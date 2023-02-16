@@ -8,10 +8,13 @@ docopt
 ecc
 exc
 fromhex
+memoryview
 openpgpcard
 pgpverstr
+recv
 rsa
 scm
+sendall
 setenv
 smartcard
 unittest
