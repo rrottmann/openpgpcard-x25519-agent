@@ -4,7 +4,7 @@ Socket interface to Curve25519 ECDH from an OpenPGP card.
 
 Usage:
   openpgpcard-x25519-agent [--card=ID] [-v | -vv | --verbosity=LEVEL]
-  openpgpcard-x25519-agent --listen=SOCKET [--card=ID]
+  openpgpcard-x25519-agent --listen [--socket=SOCKET] [--card=ID]
                            [-v | -vv | --verbosity=LEVEL]
   openpgpcard-x25519-agent --test [--card=ID] [-v | -vv | --verbosity=LEVEL]
   openpgpcard-x25519-agent --help
@@ -14,14 +14,13 @@ Options:
   -h --help             Show this help
   --version             Show agent version
   -c --card=ID          Card to use (default: first found)
-  -l --listen=SOCKET    Listen on socket path (default: /run/wg/agent1)
+  -l --listen           Listen on socket
+  -s --socket=SOCKET    Socket path (default: /var/run/wireguard/agent0)
   --test                Prompt for PIN and attempt a test X25519 operation.
   --verbosity=LEVEL     Log level (ERROR, WARNING, INFO, DEBUG)
   -v                    INFO verbosity
   -vv                   DEBUG verbosity
 """
-from sys import exit
-
 from docopt import docopt
 
 from openpgpcard_x25519_agent import __version__
@@ -33,6 +32,7 @@ from openpgpcard_x25519_agent.card import (
     test_card,
 )
 from openpgpcard_x25519_agent.cnf import init_log
+from openpgpcard_x25519_agent.server import run_server
 
 
 def main():
@@ -43,7 +43,7 @@ def main():
     if args["--version"]:
         version()
     elif args["--listen"]:
-        listen(args["--listen"], args["--card"])
+        listen(args["--socket"], args["--card"])
     elif args["--test"]:
         test(args["--card"])
     elif args["--card"]:
@@ -75,9 +75,7 @@ def listen(socket, card):
         socket: Socket path.
         card: Card ID.
     """
-    # to implement
-    print("listen")  # noqa: T201
-    exit(1)
+    run_server(socket, card)
 
 
 def test(card=None):
