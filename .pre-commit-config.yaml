@@ -71,6 +71,7 @@ repos:
     - flake8-spellcheck
     - flake8-string-format
     - pep8-naming
+    stages: [push]
 
 - repo: local
   hooks:
