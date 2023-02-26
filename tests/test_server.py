@@ -2,11 +2,13 @@
 
 from datetime import datetime
 from logging import DEBUG
+from socket import AF_UNIX, SOCK_STREAM, socket
 from unittest.mock import MagicMock
 
 import pytest
 from OpenPGPpy import PGPCardException
 
+from openpgpcard_x25519_agent.cnf import DEFAULT_SOCKET
 from openpgpcard_x25519_agent.msg import (
     ADD_SMARTCARD_KEY,
     ADD_SMARTCARD_KEY_CONSTRAINED,
@@ -18,13 +20,66 @@ from openpgpcard_x25519_agent.msg import (
     SUCCESS,
     Message,
 )
-from openpgpcard_x25519_agent.server import Seat, Server
+from openpgpcard_x25519_agent.server import Seat, Server, run_server
 
 EXAMPLE_KEY_HEX = "C53201039ADBA14BE71F886DA1D8DBE9EEBDED08CB111B75340078999AA9F038"
 
 
-def test_server_start():
-    server = Server("test.sock")
+def test_run_server_when_defaults(mocker):
+    mocker.patch("openpgpcard_x25519_agent.server.signal")
+    server_mock = mocker.patch("openpgpcard_x25519_agent.server.Server")
+
+    run_server()
+
+    assert server_mock.call_args.args[0] == DEFAULT_SOCKET
+    seats = server_mock.call_args.args[1]
+    assert len(seats) == 1
+    assert not seats[0].id
+    assert not seats[0].pin
+
+
+def test_run_server_when_socket_path_and_card_id(mocker):
+    mocker.patch("openpgpcard_x25519_agent.server.signal")
+    server_mock = mocker.patch("openpgpcard_x25519_agent.server.Server")
+
+    run_server("test.sock", "123")
+
+    assert server_mock.call_args.args[0] == "test.sock"
+    seats = server_mock.call_args.args[1]
+    assert len(seats) == 1
+    assert seats[0].id == "123"
+    assert not seats[0].pin
+
+
+def test_run_server_when_file_descriptor(mocker):
+    mocker.patch("openpgpcard_x25519_agent.server.signal")
+    server_mock = mocker.patch("openpgpcard_x25519_agent.server.Server")
+
+    run_server("10")
+
+    assert server_mock.call_args.kwargs["fileno"] == 10
+    seats = server_mock.call_args.kwargs["seats"]
+    assert len(seats) == 1
+    assert not seats[0].id
+    assert not seats[0].pin
+
+
+def test_run_server_when_systemd_listen_env(mocker, monkeypatch):
+    monkeypatch.setenv("LISTEN_FDS", "1")
+    mocker.patch("openpgpcard_x25519_agent.server.signal")
+    server_mock = mocker.patch("openpgpcard_x25519_agent.server.Server")
+
+    run_server()
+
+    assert server_mock.call_args.kwargs["fileno"] == 3
+    seats = server_mock.call_args.kwargs["seats"]
+    assert len(seats) == 1
+    assert not seats[0].id
+    assert not seats[0].pin
+
+
+def test_server_start_when_socket_path(tmp_path):
+    server = Server(tmp_path / "test.sock")
     server._listen = MagicMock(
         side_effect=lambda selector: _assert_server_listening(server, selector)
     )
@@ -34,14 +89,41 @@ def test_server_start():
     # assert sever state cleaned up after start exits
     assert not server.listening
     assert not server.path.exists()
+    assert not server.fileno
     assert not server.socket
     assert not server.interrupt_sender
     assert not server.interrupt_receiver
 
 
-def _assert_server_listening(server, selector):
+def test_server_start_when_fileno(tmp_path):
+    sock = socket(AF_UNIX, SOCK_STREAM)
+    sock.bind(str(tmp_path / "test.sock"))
+    fileno = sock.fileno()
+
+    server = Server(fileno=fileno)
+    server._listen = MagicMock(
+        side_effect=lambda selector: _assert_server_listening(server, selector, fileno)
+    )
+
+    server.start()
+
+    # assert sever state cleaned up after start exits
+    assert not server.listening
+    assert not server.path
+    assert server.fileno == fileno
+    assert not server.socket
+    assert not server.interrupt_sender
+    assert not server.interrupt_receiver
+
+
+def _assert_server_listening(server, selector, fileno=None):
     assert server.listening
-    assert server.path.exists()
+    if fileno:
+        assert not server.path
+        assert server.fileno == fileno
+    else:
+        assert server.path.exists()
+        assert not server.fileno
     assert server.socket
     assert server.interrupt_sender
     assert server.interrupt_receiver
@@ -350,13 +432,13 @@ def test_server_listen_when_interrupt_available():
     assert not server.listening
 
 
-def test_server_listen_when_accept_available():
+def test_server_listen_when_accept_available(tmp_path):
     key = MagicMock()
     key.data = "accept"
     selector = MagicMock()
     selector.select.return_value = [(key, 0)]
 
-    server = Server("test.sock")
+    server = Server(tmp_path / "test.sock")
     server.listening = True
     server.socket = MagicMock()
     server.socket.accept.return_value = (MagicMock(), None)

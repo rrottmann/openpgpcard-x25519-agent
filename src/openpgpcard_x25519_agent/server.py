@@ -13,6 +13,10 @@ from openpgpcard_x25519_agent.card import (
     get_curve25519_key,
     get_default_card,
 )
+from openpgpcard_x25519_agent.cnf import (
+    get_server_socket_file_descriptor,
+    get_socket_path,
+)
 from openpgpcard_x25519_agent.msg import (
     ADD_SMARTCARD_KEY,
     ADD_SMARTCARD_KEY_CONSTRAINED,
@@ -26,17 +30,22 @@ from openpgpcard_x25519_agent.msg import (
     Message,
 )
 
-DEFAULT_SOCKET = "/var/run/wireguard/agent0"
 
-
-def run_server(socket_path=None, card_id=None):
+def run_server(socket=None, card_id=None):
     """Runs a new server in this thread, listening on the specified socket path.
 
     Arguments:
-        socket_path (str): Path to socket file.
+        socket: Path to socket file or file descriptor number.
         card_id (str): Card to serve (as seat 0).
     """
-    server = Server(socket_path, [Seat(card_id)])
+    seats = [Seat(card_id)]
+
+    fileno = get_server_socket_file_descriptor(socket)
+    if fileno:
+        server = Server(fileno=fileno, seats=seats)
+    else:
+        server = Server(get_socket_path(socket), seats)
+
     signal(SIGINT, lambda number, frame: server.stop())
     signal(SIGTERM, lambda number, frame: server.stop())
     server.start()
@@ -52,21 +61,24 @@ class Server:
     Attributes:
         listening (bool): True if running.
         path (Path): Path to socket file.
+        fileno (int): Socket file-descriptor number.
         seats (list): List of available card seats.
         socket (socket): Listening SSH-agent server socket.
         interrupt_sender (socket): Client side of interrupt socket pair.
         interrupt_receiver (socket): Listening side of interrupt socket pair.
     """
 
-    def __init__(self, socket_path=None, seats=None):
+    def __init__(self, socket_path=None, seats=None, fileno=None):
         """Creates a new server to listen on the specified socket path.
 
         Arguments:
             socket_path (str): Path to socket file.
             seats (list): List of available card seats.
+            fileno (int): File descriptor number.
         """
         self.listening = False
-        self.path = Path(socket_path or DEFAULT_SOCKET)
+        self.path = Path(socket_path) if socket_path else None
+        self.fileno = fileno
         self.seats = seats or []
         self.socket = None
         self.interrupt_sender = None
@@ -263,12 +275,15 @@ class Server:
         if self.socket:
             self.log().warning("already bound to %s", self.path)
         else:
-            self.log().info("binding to %s", self.path)
+            self.log().info("binding to %s", self.fileno or self.path)
             self.listening = True
-            self.path.unlink(missing_ok=True)
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.socket = socket(AF_UNIX, SOCK_STREAM)
-            self.socket.bind(str(self.path))
+            if self.path:
+                self.path.unlink(missing_ok=True)
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                self.socket = socket(AF_UNIX, SOCK_STREAM)
+                self.socket.bind(str(self.path))
+            else:
+                self.socket = socket(fileno=self.fileno)
             self.socket.listen()
             self.socket.setblocking(False)
             selector.register(self.socket, EVENT_READ, "accept")
@@ -286,11 +301,12 @@ class Server:
 
     def _unbind(self, selector):
         if self.socket:
-            self.log().info("unbinding to %s", self.path)
+            self.log().info("unbinding to %s", self.fileno or self.path)
             selector.unregister(self.socket)
             self.socket.close()
             self.socket = None
-            self.path.unlink(missing_ok=True)
+            if self.path:
+                self.path.unlink(missing_ok=True)
             self.listening = False
         else:
             self.log().warning("not bound to %s", self.path)

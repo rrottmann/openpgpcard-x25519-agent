@@ -1,6 +1,13 @@
 """Unit tests for configuration utilities."""
 
-from openpgpcard_x25519_agent.cnf import DEFAULT_LOG_FORMAT, DEFAULT_LOG_LEVEL, init_log
+from openpgpcard_x25519_agent.cnf import (
+    DEFAULT_LOG_FORMAT,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_SOCKET,
+    get_server_socket_file_descriptor,
+    get_socket_path,
+    init_log,
+)
 
 
 def test_init_log_with_no_defaults(mocker, monkeypatch):
@@ -63,3 +70,28 @@ def test_init_log_with_debug_verbosity(mocker, monkeypatch):
     init_log(2)
 
     basic_config.assert_called_once_with(format=DEFAULT_LOG_FORMAT, level="DEBUG")
+
+
+def test_get_server_socket_file_descriptor_when_no_env_default_and_no_default():
+    assert not get_server_socket_file_descriptor()
+
+
+def test_get_server_socket_file_descriptor_when_no_env_default_and_path_default():
+    assert not get_server_socket_file_descriptor("test.sock")
+
+
+def test_get_server_socket_file_descriptor_when_no_env_default_and_descriptor_default():
+    assert get_server_socket_file_descriptor("10") == 10
+
+
+def test_get_server_socket_file_descriptor_when_env_default(monkeypatch):
+    monkeypatch.setenv("LISTEN_FDS", "1")
+    assert get_server_socket_file_descriptor("10") == 3
+
+
+def test_get_socket_path_when_no_default():
+    assert get_socket_path() == DEFAULT_SOCKET
+
+
+def test_get_socket_path_when_default():
+    assert get_socket_path("test.sock") == "test.sock"

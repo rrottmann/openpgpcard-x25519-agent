@@ -8,6 +8,7 @@ curve25519
 docopt
 ecc
 exc
+fileno
 fromhex
 fromtimestamp
 memoryview
@@ -24,6 +25,8 @@ sigint
 sigterm
 smartcard
 socketpair
+systemd
+tmp
 unittest
 unlink
 unregister
