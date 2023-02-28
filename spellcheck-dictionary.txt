@@ -3,6 +3,7 @@ Pcard
 Ppy
 base64
 caplog
+capsys
 cnf
 curve25519
 docopt
@@ -11,9 +12,15 @@ exc
 fileno
 fromhex
 fromtimestamp
+fullmatch
+getsockname
 memoryview
 openpgpcard
+parsable
 pgpverstr
+readinto
+readline
+readouterr
 recv
 rsa
 scm
