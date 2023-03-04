@@ -246,13 +246,13 @@ class Message:
         if self.message_type == SUCCESS and self.extension_type:
             self.parse_extension_success()
         elif self.message_type == EXTENSION_FAILURE:
-            self.log().debug("parsing response with extension failure")
+            self.log().info("parsing response with extension failure")
         elif self.message_type == REQUEST_EXTENSION:
             self.parse_request_extension()
         elif self.message_type == SUCCESS:
-            self.log().debug("parsing response with success")
+            self.log().info("parsing response with success")
         elif self.message_type == FAILURE:
-            self.log().debug("parsing response with failure")
+            self.log().info("parsing response with failure")
         elif self.message_type == ADD_SMARTCARD_KEY:
             self.parse_add_smartcard_key()
         elif self.message_type == ADD_SMARTCARD_KEY_CONSTRAINED:
@@ -266,17 +266,17 @@ class Message:
 
     def format_success(self):
         """Replaces old buffer, formatting it with a generic success message."""
-        self.log().debug("formatting response with success")
+        self.log().info("formatting response with success")
         self.initialize_buffer((SUCCESS,))
 
     def format_failure(self):
         """Replaces old buffer, formatting it with a generic failure message."""
-        self.log().debug("formatting response with failure")
+        self.log().info("formatting response with failure")
         self.initialize_buffer((FAILURE,))
 
     def format_extension_failure(self):
         """Replaces old buffer, formatting it with an extension failure message."""
-        self.log().debug("formatting response with extension failure")
+        self.log().info("formatting response with extension failure")
         self.initialize_buffer((EXTENSION_FAILURE,))
 
     def format_extension_success(self):
@@ -323,7 +323,7 @@ class Message:
         Attributes used:
             public_key (bytearray): 32-byte public key.
         """
-        self.log().debug("formatting response with public key")
+        self.log().info("formatting response with public key")
         self.initialize_buffer(1 + 4 + len(self.public_key))
         self.buffer[0] = SUCCESS
         self.insert_string(self.public_key, 1)
@@ -337,7 +337,7 @@ class Message:
         Raises:
             MessageError: If buffer formatted incorrectly.
         """
-        self.log().debug("parsing response with public key")
+        self.log().info("parsing response with public key")
         if len(self.buffer) != 37:
             raise MessageError(
                 f"wrong length response to request public key: {len(self.buffer)}"
@@ -353,7 +353,7 @@ class Message:
         Attributes used:
             shared_secret (bytearray): 32-byte shared secret.
         """
-        self.log().debug("formatting response with shared secret")
+        self.log().info("formatting response with shared secret")
         self.initialize_buffer(1 + 4 + len(self.shared_secret))
         self.buffer[0] = SUCCESS
         self.insert_string(self.shared_secret, 1)
@@ -367,7 +367,7 @@ class Message:
         Raises:
             MessageError: If buffer formatted incorrectly.
         """
-        self.log().debug("parsing response with shared secret")
+        self.log().info("parsing response with shared secret")
         if len(self.buffer) != 37:
             raise MessageError(
                 f"wrong length response to derive shared secret: {len(self.buffer)}"
@@ -423,7 +423,7 @@ class Message:
         Attributes used:
             reader_id (str): Reader ID.
         """
-        self.log().debug("formatting request for public key")
+        self.log().info("formatting request for public key")
         extension_type_size = 4 + len(REQUEST_PUBLIC_KEY)
         reader_bytes = self.reader_id.encode()
         reader_id_size = 4 + len(reader_bytes)
@@ -445,7 +445,7 @@ class Message:
         Propagates:
             MessageError: If buffer formatted incorrectly.
         """
-        self.log().debug("parsing request for public key")
+        self.log().info("parsing request for public key")
         extension_type_size = 4 + len(REQUEST_PUBLIC_KEY)
         offset = 1 + extension_type_size
 
@@ -463,7 +463,7 @@ class Message:
             reader_id (str): Reader ID.
             public_key (bytearray): 32-byte public key.
         """
-        self.log().debug("formatting request to derive shared secret")
+        self.log().info("formatting request to derive shared secret")
         extension_type_size = 4 + len(DERIVE_SHARED_SECRET)
         reader_bytes = self.reader_id.encode()
         reader_id_size = 4 + len(reader_bytes)
@@ -491,7 +491,7 @@ class Message:
         Propagates:
             MessageError: If buffer formatted incorrectly.
         """
-        self.log().debug("parsing request to derive shared secret")
+        self.log().info("parsing request to derive shared secret")
         extension_type_size = 4 + len(DERIVE_SHARED_SECRET)
         offset = 1 + extension_type_size
 
@@ -515,7 +515,7 @@ class Message:
             constrain_lifetime (int): Optional TTL in seconds.
             constrain_confirm (bool): Optionally true to require confirmations.
         """
-        self.log().debug("formatting request to add smartcard key")
+        self.log().info("formatting request to add smartcard key")
         self.message_type = ADD_SMARTCARD_KEY
         reader_bytes = self.reader_id.encode()
         reader_id_size = 4 + len(reader_bytes)
@@ -562,7 +562,7 @@ class Message:
         Propagates:
             MessageError: If buffer formatted incorrectly.
         """
-        self.log().debug("parsing request to add smartcard key")
+        self.log().info("parsing request to add smartcard key")
         offset = 1
 
         reader_bytes = self.extract_string(offset)
@@ -623,7 +623,7 @@ class Message:
             reader_id (str): Reader ID.
             pin (bytearray): PIN bytes.
         """
-        self.log().debug("formatting request to remove smartcard key")
+        self.log().info("formatting request to remove smartcard key")
         reader_bytes = self.reader_id.encode()
         reader_id_size = 4 + len(reader_bytes)
         pin_size = 4 + len(self.pin)
@@ -646,7 +646,7 @@ class Message:
         Propagates:
             MessageError: If buffer formatted incorrectly.
         """
-        self.log().debug("parsing request to remove smartcard key")
+        self.log().info("parsing request to remove smartcard key")
         offset = 1
 
         reader_bytes = self.extract_string(offset)
