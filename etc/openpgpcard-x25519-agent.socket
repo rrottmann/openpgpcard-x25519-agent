@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenPGP Card X25519 Agent Socket
+PartOf=openpgpcard-x25519-agent.service
+
+[Socket]
+ListenStream=/var/run/wireguard/agent0
+RemoveOnStop=yes
+
+# HARDENING
+SocketMode=0660
+SocketGroup=openpgpcard
+
+[Install]
+WantedBy=sockets.target
