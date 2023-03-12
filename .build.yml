@@ -1,0 +1,16 @@
+image: fedora/latest
+packages:
+- pcsc-lite-devel
+- python38
+- swig
+- tox
+sources:
+- https://git.sr.ht/~axr10/openpgpcard-x25519-agent
+tasks:
+- tox: |
+    cd openpgpcard-x25519-agent
+    tox
+triggers:
+- action: email
+  condition: always
+  to: dev@arcemtene.com
