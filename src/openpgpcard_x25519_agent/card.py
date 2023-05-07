@@ -202,9 +202,11 @@ def send_simple_command(
     _log_command(class_byte, instruction, parameter_1, parameter_2, length)
     result, status_1, status_2 = _send_command_and_zero(card, command)
     _log_response(status_1, status_2, len(result))
-
-    if status_1 != 0x90 or status_2 != 0x00:
-        raise PGPCardException(status_1, status_2)
+    
+    # 0x61XX Command successfully executed; ‘XX’ bytes of data are available and can be requested using GET RESPONSE.
+    if status_1 != 0x61:
+        if status_1 != 0x90 or status_2 != 0x00:
+            raise PGPCardException(status_1, status_2)
     return result
 
 
