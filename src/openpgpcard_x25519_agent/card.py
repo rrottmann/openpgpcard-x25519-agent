@@ -226,8 +226,7 @@ def _log_response(sw1, sw2, length):  # noqa: SC200
     getLogger(__name__).debug(s, sw1, sw2, length)  # noqa: SC200
 
 
-def 
-(card, command):
+def _send_command_and_zero(card, command):
     try:
         return card.connection.transmit(command)
     finally:
