@@ -203,7 +203,7 @@ def send_simple_command(
     result, status_1, status_2 = _send_command_and_zero(card, command)
     _log_response(status_1, status_2, len(result))
     # 0x61XX Command successfully executed; ‘XX’ bytes of data are available and can be requested using GET_RESPONSE.
-    if __status_1 == 0x61 and status_2 != 0x00:
+    if status_1 == 0x61 and status_2 != 0x00:
         # call GET_RESPONSE to receive data bytes
         command = [class_byte, 0xC0, 0x00, 0x00, status_2]
         _log_command(class_byte, instruction, parameter_1, parameter_2, length)
