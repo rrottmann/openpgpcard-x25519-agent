@@ -199,12 +199,16 @@ def send_simple_command(
     if data:
         command[6:] = data
 
-    _log_command(class_byte, instruction, parameter_1, parameter_2, length)
     result, status_1, status_2 = _send_command_and_zero(card, command)
-    _log_response(status_1, status_2, len(result))
+    while status_1 == 0x61 and status_2 != 0x00:
+        result, status_1, status_2 = _append_get_response(
+            card, class_byte, result, status_2
+        )
 
-    if status_1 != 0x90 or status_2 != 0x00:
+    if status_1 not in (0x61, 0x90) or status_2 != 0x00:
+        result[:] = bytearray(len(result))
         raise PGPCardException(status_1, status_2)
+
     return result
 
 
@@ -220,9 +224,30 @@ def _log_response(sw1, sw2, length):  # noqa: SC200
 
 def _send_command_and_zero(card, command):
     try:
-        return card.connection.transmit(command)
+        _log_command(*command[:5])
+        result, status_1, status_2 = card.connection.transmit(command)
+        _log_response(status_1, status_2, len(result))
+        return result, status_1, status_2
     finally:
         command[:] = [0] * len(command)
+
+
+def _append_get_response(card, class_byte, previous_result, expected_length):
+    command = [class_byte, 0xC0, 0x00, 0x00, expected_length]
+    result, status_1, status_2 = _send_command_and_zero(card, command)
+
+    previous_result_length = len(previous_result)
+    if previous_result_length == 0:
+        return result, status_1, status_2
+
+    result_length = len(result)
+    if result_length == 0:
+        return previous_result, status_1, status_2
+
+    full_result = previous_result + result
+    previous_result[:] = bytearray(previous_result_length)
+    result[:] = bytearray(result_length)
+    return full_result, status_1, status_2
 
 
 def verify_pin(card, pin, slot=ENCRYPTION_PIN):

@@ -2,6 +2,7 @@
 Pcard
 Ppy
 base64
+baz
 caplog
 capsys
 cnf

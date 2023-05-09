@@ -1,5 +1,6 @@
 """Unit tests for card utilities."""
 
+from logging import DEBUG
 from unittest.mock import MagicMock
 
 import pytest
@@ -111,25 +112,84 @@ def test_send_simple_command_when_failure():
     assert e.value.sw_code == 0x1234
 
 
-def test_send_command_and_zero_when_success():
-    card, sent = mock_card_and_command([5, 6, 7], 8, 9)
-    command = [1, 2, 3, 4]
+def test_send_simple_command_when_get_response_empty():
+    card = MagicMock()
+    sent = mock_card_commands(
+        card,
+        (bytearray(b"bar"), 0x61, 0x03),
+        (bytearray(0), 0x61, 0x00),
+    )
 
-    assert _send_command_and_zero(card, command) == ([5, 6, 7], 8, 9)
+    assert send_simple_command(card, 1, 2, 3, 4, b"foo") == b"bar"
 
-    assert sent == [[1, 2, 3, 4]]
-    assert command == [0, 0, 0, 0]
+    assert sent == [
+        [1, 2, 3, 4, 3, 0x66, 0x6F, 0x6F],
+        [1, 0xC0, 0, 0, 3],
+    ]
+
+
+def test_send_simple_command_when_get_response_once():
+    card = MagicMock()
+    sent = mock_card_commands(
+        card,
+        (bytearray(0), 0x61, 0x03),
+        (bytearray(b"bar"), 0x90, 0x00),
+    )
+
+    assert send_simple_command(card, 1, 2, 3, 4, b"foo") == b"bar"
+
+    assert sent == [
+        [1, 2, 3, 4, 3, 0x66, 0x6F, 0x6F],
+        [1, 0xC0, 0, 0, 3],
+    ]
+
+
+def test_send_simple_command_when_get_response_multiple():
+    card = MagicMock()
+    foo = bytearray(b"foo")
+    bar = bytearray(b"bar")
+    baz = bytearray(b"baz")
+    sent = mock_card_commands(
+        card,
+        (foo, 0x61, 0x06),
+        (bar, 0x61, 0x03),
+        (baz, 0x90, 0x00),
+    )
+
+    assert send_simple_command(card, 1, 2, 3, 4, b"foo") == b"foobarbaz"
+
+    assert sent == [
+        [1, 2, 3, 4, 3, 0x66, 0x6F, 0x6F],
+        [1, 0xC0, 0, 0, 6],
+        [1, 0xC0, 0, 0, 3],
+    ]
+    assert foo == b"\0\0\0"
+    assert bar == b"\0\0\0"
+    assert baz == b"\0\0\0"
+
+
+def test_send_command_and_zero_when_success(caplog):
+    card, sent = mock_card_and_command([6, 7, 8], 9, 0)
+    command = [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]
+
+    with caplog.at_level(DEBUG):
+        assert _send_command_and_zero(card, command) == ([6, 7, 8], 9, 0)
+
+    assert sent == [[1, 2, 3, 4, 5, 11, 12, 13, 14, 15]]
+    assert command == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    assert caplog.text.find("sending command to card: 1 2 3 4 + 5 bytes") >= 0
+    assert caplog.text.find("received response from card: 9 0 + 3 bytes") >= 0
 
 
 def test_send_command_and_zero_when_failure():
     card = MagicMock()
     card.connection.transmit.side_effect = ConnectionException("test")
-    command = [1, 2, 3, 4]
+    command = [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]
 
     with pytest.raises(ConnectionException):
         _send_command_and_zero(card, command)
 
-    assert command == [0, 0, 0, 0]
+    assert command == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 
 def test_verify_pin_when_success():
